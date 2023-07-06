@@ -1,4 +1,4 @@
-//----------------------------------------------------------------------------//
+﻿//----------------------------------------------------------------------------//
 //                                                                            //
 // ozz-animation is hosted at http://github.com/guillaumeblanc/ozz-animation  //
 // and distributed under the MIT License (MIT).                               //
@@ -74,13 +74,13 @@ void Animation::Allocate(size_t _name_len, size_t _translation_count,
          rotations_.size() == 0 && scales_.size() == 0);
 
   // Compute overall size and allocate a single buffer for all the data.
-  const size_t buffer_size = (_name_len > 0 ? _name_len + 1 : 0) +
-                             _translation_count * sizeof(Float3Key) +
-                             _rotation_count * sizeof(QuaternionKey) +
-                             _scale_count * sizeof(Float3Key);
+   size_t buffer_size = (_name_len > 0 ? _name_len + 1 : 0);
+    buffer_size += _translation_count * sizeof(Float3Key); //sizeof(Float3Key)==12 ->>(float + uint16*4) = 4+2*4 = 12;
+    buffer_size += _rotation_count * sizeof(QuaternionKey);//sizeof(QuaternionKey)==12
+    buffer_size += _scale_count * sizeof(Float3Key);
   span<byte> buffer = {static_cast<byte*>(memory::default_allocator()->Allocate(
-                           buffer_size, alignof(Float3Key))),
-                       buffer_size};
+                           buffer_size, alignof(Float3Key))), //alignof(Float3Key)是4
+                       buffer_size}; //内存按照Float3Key对齐
 
   // Fix up pointers. Serves larger alignment values first.
   translations_ = fill_span<Float3Key>(buffer, _translation_count);

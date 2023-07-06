@@ -75,69 +75,76 @@ bool SamplingJob::Validate() const {
 
 namespace {
 // Loops through the sorted key frames and update context structure.
-template <typename _Key>
-void UpdateCacheCursor(float _ratio, int _num_soa_tracks,
-                       const ozz::span<const _Key>& _keys, int* _cursor,
-                       int* _cache, unsigned char* _outdated) {
-  assert(_num_soa_tracks >= 1);
-  const int num_tracks = _num_soa_tracks * 4;
-  assert(_keys.begin() + num_tracks * 2 <= _keys.end());
+    template<typename _Key>
+    void UpdateCacheCursor(float _ratio,
+                           int _num_soa_tracks,
+                           const ozz::span<const _Key> &_keys,//动画的帧数据
+                           int *_cursor,
+                           int *_cache, //keys in animation
+                           unsigned char *_outdated) {
+        assert(_num_soa_tracks >= 1);
+        const int num_tracks = _num_soa_tracks * 4;
+        assert(_keys.begin() + num_tracks * 2 <= _keys.end());
+        const _Key *cursor = nullptr;
+        if (!*_cursor) {
+            // Initializes interpolated entries with the first 2 sets of key frames.
+            // The sorting algorithm ensures that the first 2 key frames of a track
+            // are consecutive.
+            for (int i = 0;
+                 i < _num_soa_tracks;
+                 ++i) {
+                const int in_index0 = i * 4;                   // * soa size
+                const int in_index1 = in_index0 + num_tracks;  // 2nd row.
+                const int out_index = i * 4 * 2;
+                _cache[out_index + 0] = in_index0 + 0;
+                _cache[out_index + 1] = in_index1 + 0;
+                _cache[out_index + 2] = in_index0 + 1;
+                _cache[out_index + 3] = in_index1 + 1;
+                _cache[out_index + 4] = in_index0 + 2;
+                _cache[out_index + 5] = in_index1 + 2;
+                _cache[out_index + 6] = in_index0 + 3;
+                _cache[out_index + 7] = in_index1 + 3;
+            }
+            cursor = _keys.begin() + num_tracks * 2;  // New cursor position.
 
-  const _Key* cursor = nullptr;
-  if (!*_cursor) {
-    // Initializes interpolated entries with the first 2 sets of key frames.
-    // The sorting algorithm ensures that the first 2 key frames of a track
-    // are consecutive.
-    for (int i = 0; i < _num_soa_tracks; ++i) {
-      const int in_index0 = i * 4;                   // * soa size
-      const int in_index1 = in_index0 + num_tracks;  // 2nd row.
-      const int out_index = i * 4 * 2;
-      _cache[out_index + 0] = in_index0 + 0;
-      _cache[out_index + 1] = in_index1 + 0;
-      _cache[out_index + 2] = in_index0 + 1;
-      _cache[out_index + 3] = in_index1 + 1;
-      _cache[out_index + 4] = in_index0 + 2;
-      _cache[out_index + 5] = in_index1 + 2;
-      _cache[out_index + 6] = in_index0 + 3;
-      _cache[out_index + 7] = in_index1 + 3;
+            // All entries are outdated. It cares to only flag valid soa entries as
+            // this is the exit condition of other algorithms.
+            const int num_outdated_flags = (_num_soa_tracks + 7) / 8;
+            for (int  i                  = 0;
+                 i < num_outdated_flags - 1;
+                 ++i) {
+                _outdated[i] = 0xff;
+            }
+            _outdated[num_outdated_flags - 1] =
+                    0xff >> (num_outdated_flags * 8 - _num_soa_tracks);
+        }
+        else {
+            cursor = _keys.begin() + *_cursor;  // Might be == end()
+            assert(cursor >= _keys.begin() + num_tracks * 2 && cursor <= _keys.end());
+        }
+
+        // Search for the keys that matches _ratio.
+        // Iterates while the context is not updated with left and right keys required
+        // for interpolation at time ratio _ratio, for all tracks. Thanks to the
+        // keyframe sorting, the loop can end as soon as it finds a key greater that
+        // _ratio. It will mean that all the keys lower than _ratio have been
+        // processed, meaning all context entries are up to date.
+        while (cursor < _keys.end() &&
+               _keys[_cache[cursor->track * 2 + 1]].ratio <= _ratio) {
+            // Flag this soa entry as outdated.
+            _outdated[cursor->track / 32] |= (1 << ((cursor->track & 0x1f) / 4));
+            // Updates context.
+            const int base = cursor->track * 2;
+            _cache[base]     = _cache[base + 1];
+            _cache[base + 1] = static_cast<int>(cursor - _keys.begin());
+            // Process next key.
+            ++cursor;
+        }
+        assert(cursor <= _keys.end());
+
+        // Updates cursor output.
+        *_cursor = static_cast<int>(cursor - _keys.begin());
     }
-    cursor = _keys.begin() + num_tracks * 2;  // New cursor position.
-
-    // All entries are outdated. It cares to only flag valid soa entries as
-    // this is the exit condition of other algorithms.
-    const int num_outdated_flags = (_num_soa_tracks + 7) / 8;
-    for (int i = 0; i < num_outdated_flags - 1; ++i) {
-      _outdated[i] = 0xff;
-    }
-    _outdated[num_outdated_flags - 1] =
-        0xff >> (num_outdated_flags * 8 - _num_soa_tracks);
-  } else {
-    cursor = _keys.begin() + *_cursor;  // Might be == end()
-    assert(cursor >= _keys.begin() + num_tracks * 2 && cursor <= _keys.end());
-  }
-
-  // Search for the keys that matches _ratio.
-  // Iterates while the context is not updated with left and right keys required
-  // for interpolation at time ratio _ratio, for all tracks. Thanks to the
-  // keyframe sorting, the loop can end as soon as it finds a key greater that
-  // _ratio. It will mean that all the keys lower than _ratio have been
-  // processed, meaning all context entries are up to date.
-  while (cursor < _keys.end() &&
-         _keys[_cache[cursor->track * 2 + 1]].ratio <= _ratio) {
-    // Flag this soa entry as outdated.
-    _outdated[cursor->track / 32] |= (1 << ((cursor->track & 0x1f) / 4));
-    // Updates context.
-    const int base = cursor->track * 2;
-    _cache[base] = _cache[base + 1];
-    _cache[base + 1] = static_cast<int>(cursor - _keys.begin());
-    // Process next key.
-    ++cursor;
-  }
-  assert(cursor <= _keys.end());
-
-  // Updates cursor output.
-  *_cursor = static_cast<int>(cursor - _keys.begin());
-}
 
 template <typename _Key, typename _InterpKey, typename _Decompress>
 void UpdateInterpKeyframes(int _num_soa_tracks,
@@ -313,27 +320,42 @@ bool SamplingJob::Run() const {
 
   // Fetch key frames from the animation to the context at r = anim_ratio.
   // Then updates outdated soa hot values.
-  UpdateCacheCursor(anim_ratio, num_soa_tracks, animation->translations(),
-                    &context->translation_cursor_, context->translation_keys_,
-                    context->outdated_translations_);
-  UpdateInterpKeyframes(num_soa_tracks, animation->translations(),
-                        context->translation_keys_,
-                        context->outdated_translations_,
-                        context->soa_translations_, &DecompressFloat3);
-
-  UpdateCacheCursor(anim_ratio, num_soa_tracks, animation->rotations(),
-                    &context->rotation_cursor_, context->rotation_keys_,
-                    context->outdated_rotations_);
-  UpdateInterpKeyframes(num_soa_tracks, animation->rotations(),
-                        context->rotation_keys_, context->outdated_rotations_,
-                        context->soa_rotations_, &DecompressQuaternion);
-
-  UpdateCacheCursor(anim_ratio, num_soa_tracks, animation->scales(),
-                    &context->scale_cursor_, context->scale_keys_,
-                    context->outdated_scales_);
-  UpdateInterpKeyframes(num_soa_tracks, animation->scales(),
-                        context->scale_keys_, context->outdated_scales_,
-                        context->soa_scales_, &DecompressFloat3);
+    UpdateCacheCursor(anim_ratio,
+                      num_soa_tracks,
+                      animation->translations(),
+                      &context->translation_cursor_,
+                      context->translation_keys_,
+                      context->outdated_translations_);
+    UpdateInterpKeyframes(num_soa_tracks,
+                          animation->translations(),
+                          context->translation_keys_,
+                          context->outdated_translations_,
+                          context->soa_translations_,
+                          &DecompressFloat3);
+    UpdateCacheCursor(anim_ratio,
+                      num_soa_tracks,
+                      animation->rotations(),
+                      &context->rotation_cursor_,
+                      context->rotation_keys_,
+                      context->outdated_rotations_);
+    UpdateInterpKeyframes(num_soa_tracks,
+                          animation->rotations(),
+                          context->rotation_keys_,
+                          context->outdated_rotations_,
+                          context->soa_rotations_,
+                          &DecompressQuaternion);
+    UpdateCacheCursor(anim_ratio,
+                      num_soa_tracks,
+                      animation->scales(),
+                      &context->scale_cursor_,
+                      context->scale_keys_,
+                      context->outdated_scales_);
+    UpdateInterpKeyframes(num_soa_tracks,
+                          animation->scales(),
+                          context->scale_keys_,
+                          context->outdated_scales_,
+                          context->soa_scales_,
+                          &DecompressFloat3);
 
   // only interp as much as we have output for.
   const int num_soa_interp_tracks = math::Min(static_cast< int >(output.size()), num_soa_tracks);
@@ -381,19 +403,18 @@ void SamplingJob::Context::Resize(int _max_tracks) {
   // flag: unsigned char).
 
   // Computes allocation size.
-  const size_t max_tracks = max_soa_tracks_ * 4;
-  const size_t num_outdated = (max_soa_tracks_ + 7) / 8;
-  const size_t size =
-      sizeof(InterpSoaFloat3) * max_soa_tracks_ +
-      sizeof(InterpSoaQuaternion) * max_soa_tracks_ +
-      sizeof(InterpSoaFloat3) * max_soa_tracks_ +
-      sizeof(int) * max_tracks * 2 * 3 +  // 2 keys * (trans + rot + scale).
-      sizeof(uint8_t) * 3 * num_outdated;
+  const size_t max_tracks = max_soa_tracks_ * 4;            //一个soa对应4个track
+    const size_t num_outdated = (max_soa_tracks_ + 7) / 8;
+    size_t       size         = sizeof(InterpSoaFloat3) * max_soa_tracks_;
+    size += sizeof(InterpSoaQuaternion) * max_soa_tracks_; //sizeof(InterpSoaQuaternion) ==128
+    size += sizeof(InterpSoaFloat3) * max_soa_tracks_; //sizeof(InterpSoaFloat3) ==128
+    size += sizeof(int) * max_tracks * 2 * 3;  // 2 keys * (trans + rot + scale).
+    size += sizeof(uint8_t) * 3 * num_outdated;
 
   // Allocates all at once.
   memory::Allocator* allocator = memory::default_allocator();
   char* alloc_begin = reinterpret_cast<char*>(
-      allocator->Allocate(size, alignof(InterpSoaFloat3)));
+      allocator->Allocate(size, alignof(InterpSoaFloat3))); //alignof(InterpSoaFloat3) ==16
   char* alloc_cursor = alloc_begin;
 
   // Distributes buffer memory while ensuring proper alignment (serves larger
@@ -414,7 +435,7 @@ void SamplingJob::Context::Resize(int _max_tracks) {
   assert(IsAligned(soa_scales_, alignof(InterpSoaFloat3)));
   alloc_cursor += sizeof(InterpSoaFloat3) * max_soa_tracks_;
 
-  translation_keys_ = reinterpret_cast<int*>(alloc_cursor);
+  translation_keys_ = reinterpret_cast<int*>(alloc_cursor); //多少个track就有多少个keys *2
   assert(IsAligned(translation_keys_, alignof(int)));
   alloc_cursor += sizeof(int) * max_tracks * 2;
   rotation_keys_ = reinterpret_cast<int*>(alloc_cursor);
