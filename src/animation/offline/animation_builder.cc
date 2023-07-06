@@ -1,4 +1,4 @@
-//----------------------------------------------------------------------------//
+﻿//----------------------------------------------------------------------------//
 //                                                                            //
 // ozz-animation is hosted at http://github.com/guillaumeblanc/ozz-animation  //
 // and distributed under the MIT License (MIT).                               //
@@ -265,7 +265,7 @@ unique_ptr<Animation> AnimationBuilder::operator()(
   // already been validated.
   const uint16_t num_tracks = static_cast<uint16_t>(_input.num_tracks());
   animation->num_tracks_ = num_tracks;
-  const uint16_t num_soa_tracks = Align(num_tracks, 4);
+  const uint16_t num_soa_tracks = Align(num_tracks, 4); //4倍数的大小
 
   // Declares and preallocates tracks to sort.
   size_t translations = 0, rotations = 0, scales = 0;
