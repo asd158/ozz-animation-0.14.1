@@ -403,7 +403,7 @@ void SamplingJob::Context::Resize(int _max_tracks) {
   // flag: unsigned char).
 
   // Computes allocation size.
-  const size_t max_tracks = max_soa_tracks_ * 4;            //一个soa对应4个track
+  const size_t max_tracks = max_soa_tracks_ * 4;//一个soa对应4个track
     const size_t num_outdated = (max_soa_tracks_ + 7) / 8;
     size_t       size         = sizeof(InterpSoaFloat3) * max_soa_tracks_;
     size += sizeof(InterpSoaQuaternion) * max_soa_tracks_; //sizeof(InterpSoaQuaternion) ==128
