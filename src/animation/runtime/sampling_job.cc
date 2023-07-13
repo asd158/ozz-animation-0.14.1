@@ -1,4 +1,4 @@
-//----------------------------------------------------------------------------//
+﻿//----------------------------------------------------------------------------//
 //                                                                            //
 // ozz-animation is hosted at http://github.com/guillaumeblanc/ozz-animation  //
 // and distributed under the MIT License (MIT).                               //
@@ -80,7 +80,7 @@ namespace {
                            int _num_soa_tracks,
                            const ozz::span<const _Key> &_keys,//动画的帧数据
                            int *_cursor,
-                           int *_cache, //keys in animation
+                           int *_cache, //Points to the keys in the animation that are valid for the current time ratio. 多少个track就有多少个*2的值
                            unsigned char *_outdated) {
         assert(_num_soa_tracks >= 1);
         const int num_tracks = _num_soa_tracks * 4;
@@ -91,7 +91,7 @@ namespace {
             // The sorting algorithm ensures that the first 2 key frames of a track
             // are consecutive.
             for (int i = 0;
-                 i < _num_soa_tracks;
+                 i < _num_soa_tracks;//一个soa就是4个track
                  ++i) {
                 const int in_index0 = i * 4;                   // * soa size
                 const int in_index1 = in_index0 + num_tracks;  // 2nd row.
@@ -394,16 +394,16 @@ void SamplingJob::Context::Resize(int _max_tracks) {
   Invalidate();
   memory::default_allocator()->Deallocate(soa_translations_);
 
-  // Updates maximum supported soa tracks.
-  max_soa_tracks_ = (_max_tracks + 3) / 4;
+    // Updates maximum supported soa tracks.
+    max_soa_tracks_ = (_max_tracks + 3) / 4;
 
-  // Allocate all context data at once in a single allocation.
-  // Alignment is guaranteed because memory is dispatch from the highest
-  // alignment requirement (Soa data: SimdFloat4) to the lowest (outdated
-  // flag: unsigned char).
+    // Allocate all context data at once in a single allocation.
+    // Alignment is guaranteed because memory is dispatch from the highest
+    // alignment requirement (Soa data: SimdFloat4) to the lowest (outdated
+    // flag: unsigned char).
 
-  // Computes allocation size.
-  const size_t max_tracks = max_soa_tracks_ * 4;//一个soa对应4个track
+    // Computes allocation size.
+    const size_t max_tracks   = max_soa_tracks_ * 4;//一个soa对应4个track
     const size_t num_outdated = (max_soa_tracks_ + 7) / 8;
     size_t       size         = sizeof(InterpSoaFloat3) * max_soa_tracks_;
     size += sizeof(InterpSoaQuaternion) * max_soa_tracks_; //sizeof(InterpSoaQuaternion) ==128
@@ -411,11 +411,12 @@ void SamplingJob::Context::Resize(int _max_tracks) {
     size += sizeof(int) * max_tracks * 2 * 3;  // 2 keys * (trans + rot + scale).
     size += sizeof(uint8_t) * 3 * num_outdated;
 
-  // Allocates all at once.
-  memory::Allocator* allocator = memory::default_allocator();
-  char* alloc_begin = reinterpret_cast<char*>(
-      allocator->Allocate(size, alignof(InterpSoaFloat3))); //alignof(InterpSoaFloat3) ==16
-  char* alloc_cursor = alloc_begin;
+    // Allocates all at once.
+    memory::Allocator *allocator    = memory::default_allocator();
+    char              *alloc_begin  = reinterpret_cast<char *>(
+            allocator->Allocate(size,
+                                alignof(InterpSoaFloat3))); //alignof(InterpSoaFloat3) ==16
+    char              *alloc_cursor = alloc_begin;
 
   // Distributes buffer memory while ensuring proper alignment (serves larger
   // alignment values first).
@@ -435,7 +436,7 @@ void SamplingJob::Context::Resize(int _max_tracks) {
   assert(IsAligned(soa_scales_, alignof(InterpSoaFloat3)));
   alloc_cursor += sizeof(InterpSoaFloat3) * max_soa_tracks_;
 
-  translation_keys_ = reinterpret_cast<int*>(alloc_cursor); //多少个track就有多少个keys *2
+  translation_keys_ = reinterpret_cast<int*>(alloc_cursor);
   assert(IsAligned(translation_keys_, alignof(int)));
   alloc_cursor += sizeof(int) * max_tracks * 2;
   rotation_keys_ = reinterpret_cast<int*>(alloc_cursor);
