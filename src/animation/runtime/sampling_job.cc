@@ -146,53 +146,78 @@ namespace {
         *_cursor = static_cast<int>(cursor - _keys.begin());
     }
 
-template <typename _Key, typename _InterpKey, typename _Decompress>
-void UpdateInterpKeyframes(int _num_soa_tracks,
-                           const ozz::span<const _Key>& _keys,
-                           const int* _interp, uint8_t* _outdated,
-                           _InterpKey* _interp_keys,
-                           const _Decompress& _decompress) {
-  const int num_outdated_flags = (_num_soa_tracks + 7) / 8;
-  for (int j = 0; j < num_outdated_flags; ++j) {
-    uint8_t outdated = _outdated[j];
-    _outdated[j] = 0;  // Reset outdated entries as all will be processed.
-    for (int i = j * 8; outdated; ++i, outdated >>= 1) {
-      if (!(outdated & 1)) {
-        continue;
-      }
-      const int base = i * 4 * 2;  // * soa size * 2 keys
+    template<typename _Key, typename _InterpKey, typename _Decompress>
+    void UpdateInterpKeyframes(int _num_soa_tracks,
+                               const ozz::span<const _Key> &_keys,
+                               const int *_cache,
+                               uint8_t *_outdated,
+                               _InterpKey *_interp_keys,
+                               const _Decompress &_decompress) {
+        const int num_outdated_flags = (_num_soa_tracks + 7) / 8;
+        for (int  j                  = 0;
+             j < num_outdated_flags;
+             ++j) {
+            uint8_t outdated = _outdated[j];
+            _outdated[j] = 0;  // Reset outdated entries as all will be processed.
+            for (int i = j * 8;
+                 outdated;
+                 ++i, outdated >>= 1) {
+                if (!(outdated & 1)) {
+                    continue;
+                }
+                const int base = i * 4 * 2;  // * soa size * 2 keys
 
-      // Decompress left side keyframes and store them in soa structures.
-      const _Key& k00 = _keys[_interp[base + 0]];
-      const _Key& k10 = _keys[_interp[base + 2]];
-      const _Key& k20 = _keys[_interp[base + 4]];
-      const _Key& k30 = _keys[_interp[base + 6]];
-      _interp_keys[i].ratio[0] =
-          math::simd_float4::Load(k00.ratio, k10.ratio, k20.ratio, k30.ratio);
-      _decompress(k00, k10, k20, k30, &_interp_keys[i].value[0]);
+                // Decompress left side keyframes and store them in soa structures.
+                const _Key &k00 = _keys[_cache[base + 0]];
+                const _Key &k10 = _keys[_cache[base + 2]];
+                const _Key &k20 = _keys[_cache[base + 4]];
+                const _Key &k30 = _keys[_cache[base + 6]];
+                _interp_keys[i].ratio[0] = math::simd_float4::Load(k00.ratio,
+                                                                   k10.ratio,
+                                                                   k20.ratio,
+                                                                   k30.ratio);
+                _decompress(k00,
+                            k10,
+                            k20,
+                            k30,
+                            &_interp_keys[i].value[0]);
 
-      // Decompress right side keyframes and store them in soa structures.
-      const _Key& k01 = _keys[_interp[base + 1]];
-      const _Key& k11 = _keys[_interp[base + 3]];
-      const _Key& k21 = _keys[_interp[base + 5]];
-      const _Key& k31 = _keys[_interp[base + 7]];
-      _interp_keys[i].ratio[1] =
-          math::simd_float4::Load(k01.ratio, k11.ratio, k21.ratio, k31.ratio);
-      _decompress(k01, k11, k21, k31, &_interp_keys[i].value[1]);
+                // Decompress right side keyframes and store them in soa structures.
+                const _Key &k01 = _keys[_cache[base + 1]];
+                const _Key &k11 = _keys[_cache[base + 3]];
+                const _Key &k21 = _keys[_cache[base + 5]];
+                const _Key &k31 = _keys[_cache[base + 7]];
+                _interp_keys[i].ratio[1] = math::simd_float4::Load(k01.ratio,
+                                                                   k11.ratio,
+                                                                   k21.ratio,
+                                                                   k31.ratio);
+                _decompress(k01,
+                            k11,
+                            k21,
+                            k31,
+                            &_interp_keys[i].value[1]);
+            }
+        }
     }
-  }
-}
 
-inline void DecompressFloat3(const Float3Key& _k0, const Float3Key& _k1,
-                             const Float3Key& _k2, const Float3Key& _k3,
-                             math::SoaFloat3* _soa_float3) {
-  _soa_float3->x = math::HalfToFloat(math::simd_int4::Load(
-      _k0.value[0], _k1.value[0], _k2.value[0], _k3.value[0]));
-  _soa_float3->y = math::HalfToFloat(math::simd_int4::Load(
-      _k0.value[1], _k1.value[1], _k2.value[1], _k3.value[1]));
-  _soa_float3->z = math::HalfToFloat(math::simd_int4::Load(
-      _k0.value[2], _k1.value[2], _k2.value[2], _k3.value[2]));
-}
+    inline void DecompressFloat3(const Float3Key &_k0,
+                                 const Float3Key &_k1,
+                                 const Float3Key &_k2,
+                                 const Float3Key &_k3,
+                                 math::SoaFloat3 *_soa_float3) {
+        _soa_float3->x = math::HalfToFloat(math::simd_int4::Load(_k0.value[0],
+                                                                 _k1.value[0],
+                                                                 _k2.value[0],
+                                                                 _k3.value[0]));
+        _soa_float3->y = math::HalfToFloat(math::simd_int4::Load(_k0.value[1],
+                                                                 _k1.value[1],
+                                                                 _k2.value[1],
+                                                                 _k3.value[1]));
+        _soa_float3->z = math::HalfToFloat(math::simd_int4::Load(_k0.value[2],
+                                                                 _k1.value[2],
+                                                                 _k2.value[2],
+                                                                 _k3.value[2]));
+    }
 
 // Defines a mapping table that defines components assignation in the output
 // quaternion.

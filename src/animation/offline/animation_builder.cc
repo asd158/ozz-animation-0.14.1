@@ -134,7 +134,7 @@ void CopyToAnimation(ozz::vector<_SortingKey>* _src,
   }
 
   // Sort animation keys to favor cache coherency.
-  std::sort(&_src->front(), (&_src->back()) + 1, &SortingKeyLess<_SortingKey>);
+  std::sort(&_src->front(), (&_src->back()) + 1, &SortingKeyLess<_SortingKey>);//将所有的frame数据按照时间排序。
 
   // Fills output.
   const _SortingKey* src = &_src->front();
@@ -310,7 +310,7 @@ unique_ptr<Animation> AnimationBuilder::operator()(
   animation->Allocate(_input.name.length(), sorting_translations.size(),
                       sorting_rotations.size(), sorting_scales.size());
 
-  // Copy sorted keys to final animation.
+  // Copy sorted keys to final animation. 这个很关键，这个copy操作会将track数据全部按照时间排序！！！
   CopyToAnimation(&sorting_translations, &animation->translations_,
                   inv_duration);
   CopyToAnimation(&sorting_rotations, &animation->rotations_, inv_duration);
