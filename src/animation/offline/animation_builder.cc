@@ -67,6 +67,7 @@ struct SortingScaleKey {
 };
 
 // Keyframe sorting. Stores first by time and then track number.
+//先按照时间戳排序，然后再按track id排序
 template <typename _Key>
 bool SortingKeyLess(const _Key& _left, const _Key& _right) {
   const float time_diff = _left.prev_key_time - _right.prev_key_time;
@@ -158,6 +159,8 @@ bool LessAbs(float _left, float _right) {
 // integers, while the largest is recomputed thanks to quaternion normalization
 // property (x^2+y^2+z^2+w^2 = 1). Because the 3 components are the 3 smallest,
 // their value cannot be greater than sqrt(2)/2. Thus quantization quality is
+// x^2+y^2+z^2 =1 -w^2
+// x^2+y^2+z^2 <= 1/2 ;因为w如果为最大值，其他元素不可能大于1/sqrt(2),不然元素的平方就大于1/2，这样w就不可能是最大的了。
 // improved by pre-multiplying each componenent by sqrt(2).
 void CompressQuat(const ozz::math::Quaternion& _src,
                   ozz::animation::QuaternionKey* _dest) {
