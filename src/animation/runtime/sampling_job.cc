@@ -97,14 +97,17 @@ namespace {
                 const int in_index1 = in_index0 + num_tracks;  // 2nd row.
                 const int out_index = i * 4 * 2;
                 _cache[out_index + 0] = in_index0 + 0;
-                _cache[out_index + 1] = in_index1 + 0;
+                _cache[out_index + 1] = in_index1 + 0; //track0的待插值的keys的位置偏移【begin idx, end idx】
                 _cache[out_index + 2] = in_index0 + 1;
-                _cache[out_index + 3] = in_index1 + 1;
+                _cache[out_index + 3] = in_index1 + 1; //track1的待插值的keys的位置偏移【begin idx, end idx】
                 _cache[out_index + 4] = in_index0 + 2;
-                _cache[out_index + 5] = in_index1 + 2;
+                _cache[out_index + 5] = in_index1 + 2; //track2的待插值的keys的位置偏移【begin idx, end idx】
                 _cache[out_index + 6] = in_index0 + 3;
-                _cache[out_index + 7] = in_index1 + 3;
+                _cache[out_index + 7] = in_index1 + 3; //track3的待插值的keys的位置偏移【begin idx, end idx】
             }
+            //_cache里面存储的是 num_tracks*2数量的 idx。
+            //相当于一个纵轴为track id 横轴为 ratio的 二维数组的（特殊）列排序的索引值，为什么“特殊”？因为有二维数组有空值，同行的后面的数据会挤压到前面。
+            // 这个目的就是保证每个track都有两个keys被取到（一个first key， 一个end key），后面可以用这个两个值来插值。
             cursor = _keys.begin() + num_tracks * 2;  // New cursor position.
 
             // All entries are outdated. It cares to only flag valid soa entries as
@@ -125,10 +128,14 @@ namespace {
 
         // Search for the keys that matches _ratio.
         // Iterates while the context is not updated with left and right keys required
-        // for interpolation at time ratio _ratio, for all tracks. Thanks to the
         // keyframe sorting, the loop can end as soon as it finds a key greater that
         // _ratio. It will mean that all the keys lower than _ratio have been
         // processed, meaning all context entries are up to date.
+
+        // _cache[cursor->track * 2 + 1] 主要解释：指定了cursor->track对应的end keyframe的位置偏移。
+        // 判断当前cursor对应待插值的 end keyframe的ratio是不是过小了。
+        // 过小了，就需要移动 endidx 到 beginidx，然后赋值最新的idx（cursor - _keys.begin()）到end idx里面
+
         while (cursor < _keys.end() &&
                _keys[_cache[cursor->track * 2 + 1]].ratio <= _ratio) {
             // Flag this soa entry as outdated.
