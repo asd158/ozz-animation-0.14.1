@@ -116,7 +116,7 @@ namespace {
             for (int  i                  = 0;
                  i < num_outdated_flags - 1;
                  ++i) {
-                _outdated[i] = 0xff;
+                _outdated[i] = 0xff; //一个标志为代表四个track是否更新过的标志
             }
             _outdated[num_outdated_flags - 1] =
                     0xff >> (num_outdated_flags * 8 - _num_soa_tracks);
